@@ -3,10 +3,17 @@
 #include <catch2/catch.hpp>
 #include <string>
 
-struct Thing : public spot::Handled<Thing> {
+namespace spot
+{
+struct Thing : public Handled<Thing> {
     Thing(std::string n)
         : name {std::move(n)}
     {
+    }
+
+    bool operator==(const Thing& o) const
+    {
+        return name == o.name;
     }
 
     std::string name;
@@ -14,28 +21,50 @@ struct Thing : public spot::Handled<Thing> {
 
 TEST_CASE("handle")
 {
-    Thing::Handle chair;
-    REQUIRE(!chair);
+    Handle<Thing> desk;
+    REQUIRE(!desk);
 
-    chair = Thing::create("chair");
-    REQUIRE(chair);
-    REQUIRE(chair == chair->handle);
-    REQUIRE(chair.get_index() == 0);
-    // REQUIRE(chair.get_generation() == 0);
-    REQUIRE(chair->name == "chair");
+    SECTION("section")
+    {
+        Handle<Thing> chair;
+        REQUIRE(!chair);
 
-    auto desk = Thing::create("desk");
-    REQUIRE(desk);
-    REQUIRE(desk.get_index() == 1);
-    REQUIRE(desk.get_generation() == 0);
-    REQUIRE(desk->name == "desk");
+        auto& things = Pack<Thing>::get();
 
-    chair->handle.invalidate();
-    REQUIRE(!chair);
+        chair = things.push("chair");
+        REQUIRE(chair);
+        REQUIRE(chair == chair->handle);
+        REQUIRE(chair.get_index() == 0);
+        REQUIRE(chair.get_generation() == 0);
+        REQUIRE(chair->name == "chair");
 
-    auto monitor = Thing::create("monitor");
-    REQUIRE(monitor);
-    REQUIRE(monitor.get_index() == chair.get_index());
-    REQUIRE(monitor.get_generation() == chair.get_generation() + 1);
-    REQUIRE(monitor != chair);
+        auto desk = things.push("desk");
+        REQUIRE(desk);
+        REQUIRE(desk.get_index() == 1);
+        REQUIRE(desk.get_generation() == 0);
+        REQUIRE(desk->name == "desk");
+        REQUIRE(desk == things.find(1));
+
+        auto hash = std::hash<Handle<Thing>>();
+        REQUIRE(hash(chair) != hash(desk));
+
+        chair->handle.invalidate();
+        REQUIRE(!chair);
+
+        auto monitor = things.push("monitor");
+        REQUIRE(monitor);
+        REQUIRE(monitor.get_index() == chair.get_index());
+        REQUIRE(monitor.get_generation() == chair.get_generation() + 1);
+        REQUIRE(monitor != chair);
+
+        auto clone_monitor = monitor.clone();
+        REQUIRE(clone_monitor);
+        REQUIRE(clone_monitor != monitor);
+        REQUIRE(&*clone_monitor != &*monitor);
+        REQUIRE(*clone_monitor == *monitor);
+    }
+
+    REQUIRE(!desk);
 }
+
+} // namespace spot
