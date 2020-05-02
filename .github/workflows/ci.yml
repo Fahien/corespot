@@ -21,7 +21,7 @@ jobs:
         run: cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Debug
 
       - name: build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Debug --parallel
       
       - name: test
-        run: cd build/test && ctest
+        run: cd build/test && ctest -V

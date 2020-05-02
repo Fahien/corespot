@@ -24,24 +24,18 @@ TEST_CASE("handle")
     // REQUIRE(chair.get_generation() == 0);
     REQUIRE(chair->name == "chair");
 
-    SECTION("another-handle")
-    {
-        auto desk = Thing::create("desk");
-        REQUIRE(desk);
-        REQUIRE(desk.get_index() == 1);
-        REQUIRE(desk.get_generation() == 0);
-        REQUIRE(desk->name == "desk");
-    }
+    auto desk = Thing::create("desk");
+    REQUIRE(desk);
+    REQUIRE(desk.get_index() == 1);
+    REQUIRE(desk.get_generation() == 0);
+    REQUIRE(desk->name == "desk");
 
     chair->handle.invalidate();
     REQUIRE(!chair);
 
-    SECTION("recycle-handle")
-    {
-        auto monitor = Thing::create("monitor");
-        REQUIRE(monitor);
-        REQUIRE(monitor.get_index() == chair.get_index());
-        REQUIRE(monitor.get_generation() == chair.get_generation() + 1);
-        REQUIRE(monitor != chair);
-    }
+    auto monitor = Thing::create("monitor");
+    REQUIRE(monitor);
+    REQUIRE(monitor.get_index() == chair.get_index());
+    REQUIRE(monitor.get_generation() == chair.get_generation() + 1);
+    REQUIRE(monitor != chair);
 }

@@ -13,12 +13,15 @@ include(${MODULE_PATH}/conan.cmake)
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(INCLUDES
     ${INCLUDE_DIR}/spot/handle.h
+    ${INCLUDE_DIR}/spot/log.h
 )
 source_group(include FILES ${INCLUDES})
 
 # Sources
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
-set(SOURCES)
+set(SOURCES
+    ${SOURCE_DIR}/log.cc
+)
 source_group(src FILES ${SOURCES})
 
 # Library
