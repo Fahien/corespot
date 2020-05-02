@@ -1,10 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <limits>
 #include <memory>
 #include <vector>
-#include <cassert>
 
 namespace spot
 {
@@ -145,7 +145,7 @@ template<typename T>
 struct hash<spot::Handle<T>> {
     size_t operator()(const spot::Handle<T>& handle) const
     {
-        return handle.get_index() ^ handle.get_generation();
+        return hash_combine(handle.get_index(), handle.get_generation());
     }
 };
 

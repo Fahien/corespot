@@ -2,5 +2,6 @@
 
 CoreSpot is a C++ generic library coded for learning purposes. I use it with all my other projects. It provides the following features.
 
-- Handle
-- Log
+- Handle idiom
+- Log with fmt
+- Hash combine
