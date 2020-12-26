@@ -2,6 +2,7 @@
 set(TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/handle.cc
 )
 source_group(test FILES ${TEST_SOURCES})
 

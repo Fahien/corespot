@@ -11,7 +11,9 @@ include(${MODULE_PATH}/conan.cmake)
 
 # Includes
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(INCLUDES)
+set(INCLUDES
+    ${INCLUDE_DIR}/spot/handle.h
+)
 source_group(include FILES ${INCLUDES})
 
 # Sources
