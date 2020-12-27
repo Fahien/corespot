@@ -5,7 +5,7 @@
 
 namespace spot
 {
-struct Thing : public Handled<Thing> {
+struct Thing {
     Thing(std::string n)
         : name {std::move(n)}
     {
@@ -33,14 +33,13 @@ TEST_CASE("handle")
 
         chair = things.push("chair");
         REQUIRE(chair);
-        REQUIRE(chair == chair->handle);
-        REQUIRE(chair.get_index() == 0);
+        REQUIRE(chair.get_id() == 0);
         REQUIRE(chair.get_generation() == 0);
         REQUIRE(chair->name == "chair");
 
         auto desk = things.push("desk");
         REQUIRE(desk);
-        REQUIRE(desk.get_index() == 1);
+        REQUIRE(desk.get_id() == 1);
         REQUIRE(desk.get_generation() == 0);
         REQUIRE(desk->name == "desk");
         REQUIRE(desk == things.find(1));
@@ -48,13 +47,17 @@ TEST_CASE("handle")
         auto hash = std::hash<Handle<Thing>>();
         REQUIRE(hash(chair) != hash(desk));
 
-        chair->handle.invalidate();
-        REQUIRE(!chair);
+        SECTION("invalidating a handle invalidates all handles to the same element")
+        {
+            things.find(0).invalidate();
+            REQUIRE(!chair);
+        }
 
         auto monitor = things.push("monitor");
         REQUIRE(monitor);
-        REQUIRE(monitor.get_index() == chair.get_index());
-        REQUIRE(monitor.get_generation() == chair.get_generation() + 1);
+        REQUIRE(monitor.get_id() == 0);
+        REQUIRE(monitor.get_generation() == 1);
+        REQUIRE(monitor.get_id() == chair.get_id());
         REQUIRE(monitor != chair);
 
         auto clone_monitor = monitor.clone();

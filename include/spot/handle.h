@@ -8,8 +8,6 @@
 #include "spot/algorithm.h"
 #include "spot/hash.h"
 
-#define INVALID_INDEX std::numeric_limits<size_t>::max()
-
 namespace spot
 {
 template<typename T>
@@ -39,12 +37,14 @@ public:
 
     T& operator*() const
     {
-        return Pack<T>::get()[index];
+        auto& pack = Pack<T>::get();
+        auto& gen = pack.indices[id];
+        return pack.vec[gen.index];
     }
 
     bool operator==(const Handle<T>& other) const
     {
-        return index == other.index && generation == other.generation;
+        return id == other.id && generation == other.generation;
     }
 
     bool operator!=(const Handle<T>& other) const
@@ -52,13 +52,12 @@ public:
         return !(*this == other);
     }
 
-    /// @return The position of the element in the vecto
-    size_t get_index() const
+    /// @return The id of this handle
+    size_t get_id() const
     {
-        return index;
+        return id;
     }
 
-    /// @return The generation of this element
     size_t get_generation() const
     {
         return generation;
@@ -68,63 +67,43 @@ public:
     void invalidate();
 
     /// @brief Creates a copy of the element
-    /// @returns A new handle to the new element
+    /// @return A new handle to the new element
     Handle<T> clone() const;
 
 private:
-    /// @param i Index to the element pointed to by the handle
-    /// @param g Generation of the handle
-    Handle(size_t i, size_t g = 0);
+    /// @param id ID of this handle is its position within Pack indices
+    Handle(size_t id, size_t generation = 0);
 
-    size_t index = INVALID_INDEX;
+    /// ID is its index within the list of handles of a Pack
+    size_t id = ULONG_MAX;
+
     size_t generation = 0;
 
     friend Pack<T>;
 };
 
 template<typename T>
-Handle<T>::Handle(size_t i, size_t g)
-    : index {i}
-    , generation {g}
+Handle<T>::Handle(size_t id, size_t generation)
+    : id {id}
+    , generation {generation}
 {
     auto& pack = Pack<T>::get();
-    assert(index != INVALID_INDEX && i < pack.len() && "Handle index out of vec bounds");
-    assert(generation != INVALID_INDEX && "Generation exhausted");
+    assert(id != ULONG_MAX && id < pack.indices.size() + 1 && "Handle ID out of indices bounds");
 }
 
 template<typename T>
 void Handle<T>::invalidate()
 {
-    // Invalidate only index
-    index = INVALID_INDEX;
-    // Generation will be incremented when index
-    // position in the Pack will be reused
+    // Invalidate main handle
+    auto& pack = Pack<T>::get();
+    // Remove element
+    pack.remove(*this);
 }
 
 template<typename T>
 Handle<T> Handle<T>::clone() const
 {
-    auto& pack = Pack<T>::get();
-    if (*this) {
-        // Try finding invalid element
-        auto it = find_if(pack, [](auto& e) { return !e.handle; });
-        if (it == std::end(pack)) {
-            // New elements will have generation 0
-            auto& copy = pack.vec.emplace_back(**this);
-            size_t new_index = pack.len() - 1;
-            copy.handle = Handle<T>(new_index);
-            return copy.handle;
-        } else {
-            auto new_gen = it->handle.get_generation() + 1;
-            // Overwrite old element
-            (*it) = **this;
-            auto same_index = it - std::begin(pack.vec);
-            it->handle = Handle<T>(same_index, new_gen);
-            return it->handle;
-        }
-    }
-
-    return {};
+    return Pack<T>::get().push(**this);
 }
 
 template<typename T>
@@ -132,10 +111,24 @@ Handle<T>::operator bool() const
 {
     auto& pack = Pack<T>::get();
     return
-        // Check it is within boundaries
-        index < pack.len() &&
-        // Check validity of main handle
-        *this == pack[index].handle;
+        // Check it is within indices boundaries
+        id < pack.indices.size() &&
+        // Check validity of generational index
+        pack.indices[id] &&
+        // Check they are same generation
+        generation == pack.indices[id].generation;
+}
+
+struct Gen {
+    size_t index = ULONG_MAX;
+    size_t generation = 0;
+
+    explicit operator bool() const;
+};
+
+Gen::operator bool() const
+{
+    return index != ULONG_MAX;
 }
 
 template<typename T>
@@ -144,14 +137,16 @@ class Pack
 public:
     static Pack<T>& get();
 
-    size_t len() const;
+    size_t size() const;
 
-    Handle<T> find(size_t i) const;
+    /// @return Whether the current id is pointing to a valid generational index
+    Handle<T> find(size_t id) const;
 
     typename std::vector<T>::iterator begin()
     {
         return vec.begin();
     }
+
     typename std::vector<T>::iterator end()
     {
         return vec.end();
@@ -161,6 +156,7 @@ public:
     {
         return vec.begin();
     }
+
     typename std::vector<T>::const_iterator end() const
     {
         return vec.end();
@@ -179,6 +175,8 @@ public:
         return vec[index];
     }
 
+    void remove(const Handle<T>& handle);
+
 private:
     Pack() = default;
 
@@ -188,7 +186,14 @@ private:
     Pack(Pack&&) = delete;
     Pack& operator=(Pack&&) = delete;
 
+    /// List of contiguous elements
     std::vector<T> vec;
+
+    /// List of generational indices to elements
+    std::vector<Gen> indices;
+
+    /// List of positions to free indices
+    std::vector<size_t> free;
 
     friend Handle<T>;
 };
@@ -201,56 +206,63 @@ Pack<T>& Pack<T>::get()
 }
 
 template<typename T>
-size_t Pack<T>::len() const
+size_t Pack<T>::size() const
 {
     return vec.size();
 }
 
 template<typename T>
-Handle<T> Pack<T>::find(size_t i) const
+Handle<T> Pack<T>::find(size_t id) const
 {
-    Handle<T> ret;
-    if (i < len()) {
-        ret = vec[i].handle;
-    }
-    return ret;
+    return Handle<T>(id);
 }
 
 template<typename T>
 template<typename... Args>
 Handle<T> Pack<T>::push(Args&&... args)
 {
-    // Try finding invalid element
-    auto it = find_if(vec, [](auto& e) { return !e.handle; });
-    if (it == std::end(vec)) {
-        // New elements will have generation 0
-        auto& elem = vec.emplace_back(std::forward<Args>(args)...);
-        elem.handle = Handle<T>(len() - 1);
-        return elem.handle;
+    auto index = vec.size();
+    auto& elem = vec.emplace_back(std::forward<Args>(args)...);
+
+    size_t id;
+    if (free.empty()) {
+        id = indices.size();
+        auto gen = Gen {index, 0};
+        // Id is an index into the indices vector
+        indices.emplace_back(std::move(gen));
     } else {
-        auto new_gen = it->handle.get_generation() + 1;
-        // Overwrite old element
-        (*it) = std::move(T(std::forward<Args>(args)...));
-        auto same_index = it - std::begin(vec);
-        it->handle = Handle<T>(same_index, new_gen);
-        return it->handle;
+        id = free.back();
+        free.pop_back();
+        // Update the index pointed to by this handle
+        // @todo Move generation here?
+        indices[id].index = index;
+        indices[id].generation++;
     }
+
+    return Handle<T>(id, indices[id].generation);
 }
 
 template<typename T>
-class Handled
+void Pack<T>::remove(const Handle<T>& handle)
 {
-public:
-    virtual ~Handled() = default;
+    auto& gen = indices[handle.id];
+    auto last_index = vec.size() - 1;
+    std::swap(vec[gen.index], vec[last_index]);
+    vec.pop_back();
 
-    virtual void invalidate()
-    {
-        handle.invalidate();
-    }
+    // Update index that was pointing to last element
+    // We do not know where it is, therefore let us find it
+    auto it = find_if(indices, [last_index](Gen& g) { return g.index == last_index; });
+    assert(it != std::end(indices) && "Failed to update index for swapped element");
+    it->index = gen.index;
 
-    /// @brief Main handle of the element. It becomes invalid when the element can be overwritten
-    Handle<T> handle;
-};
+    // Invalidate index only as generation will be
+    // incremented when index position in the Pack will be reused
+    gen.index = ULONG_MAX;
+
+    // Index of the removed element can be added to free list
+    free.emplace_back(handle.id);
+}
 
 } // namespace spot
 
@@ -260,7 +272,7 @@ template<typename T>
 struct hash<spot::Handle<T>> {
     size_t operator()(const spot::Handle<T>& handle) const
     {
-        return hash_combine(handle.get_index(), handle.get_generation());
+        return hash_combine(handle.get_id(), handle.get_generation());
     }
 };
 
